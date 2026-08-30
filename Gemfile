@@ -1,0 +1,29 @@
+# frozen_string_literal: true
+
+ruby file: ".ruby-version"
+
+source "https://rubygems.org"
+
+gemspec
+
+group :quality do
+  gem "caliber", "~> 0.94"
+  gem "git-lint", "~> 11.0"
+  gem "reek", "~> 6.5", require: false
+  gem "simplecov", "~> 1.0", require: false
+end
+
+group :development do
+  gem "rake", "~> 13.4"
+end
+
+group :test do
+  gem "rspec", "~> 3.13"
+end
+
+group :tools do
+  gem "amazing_print", "~> 2.0"
+  gem "debug", "~> 1.11"
+  gem "irb-kit", "~> 2.2"
+  gem "repl_type_completor", "~> 0.1"
+end
