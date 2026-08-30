@@ -2,15 +2,25 @@
 :toclevels: 5
 :figure-caption!:
 
+:command_pattern_link: link:https://alchemists.io/articles/command_pattern[Command Pattern]
+:core_link: link:https://alchemists.io/projects/core[Core]
+:liquid_link: link:https://shopify.github.io/liquid/[Liquid]
+:structs_link: link:https://alchemists.io/articles/ruby_structs[Structs]
+
 = Superfluid
 
 toc::[]
 
 == Features
 
+* Simple renderer initialization.
+* Powerful, and customizable, default environment with a cleaner Object API.
+* Ability to register filters as commands (see {command_pattern_link} for details).
+
 == Requirements
 
 . link:https://www.ruby-lang.org[Ruby].
+. {liquid_link}.
 
 == Setup
 
@@ -45,6 +55,129 @@ require "superfluid"
 ----
 
 == Usage
+
+The quickest way to get started is to create a new instance:
+
+[source,ruby]
+----
+renderer = Superfluid.new
+----
+
+Now you can render your template and associated data:
+
+[source,ruby]
+----
+renderer.call "Wow, that was {{ value }}!", "value" => "quick"
+----
+
+The above will yield the following output:
+
+----
+"Wow, that was quick!"
+----
+
+=== Environments
+
+To build the default environment, use:
+
+[source,ruby]
+----
+environment = Superfluid.build
+----
+
+You can also build the default environment directly (which is what the above does:
+
+[source,ruby]
+----
+environment = Superfluid::Environment.for
+----
+
+Both of the above produce a _frozen_ environment (including frozen tags). If you need an environment that isn't frozen (tags included), use:
+
+[source,ruby]
+----
+environment = Superfluid::Environment.new
+----
+
+You can, later, freeze the environment once you've registered any/all filters and tags as follows:
+
+[source,ruby]
+----
+environment.freeze
+----
+
+Finally, the environment is an instance of a `Struct` which means you can leverage all of the power of {structs_link}.
+
+When using `Superfluid.build`, `Superfluid::Environment.for`, or `Superfluid::Environment.new`, you can customize behavior via the following keyword arguments:
+
+* `default_resource_limits`: The resource limits you want to set. Default: `{}`.
+* `error_mode`: The error mode. Default: `:strict`.
+* `exception_renderer`: The exception renderer. Default: `Core::Identity` (see {core_link} for details).
+* `file_system`: The file system. Default: `Superfluid::Systems::Memory.new`.
+* `filter_registry`: The filter registry. Default: `Superfluid::Registries::Filter.new`.
+* `tags`: The default tags. Default: `Liquid::Tags::STANDARD_TAGS`.
+
+=== Filters
+
+By default, {liquid_link} only allows registration of filters as instance methods on a namespace (`Module`). Unfortunately, this leads to terrible design, bad practices, and unnecessarily hard to test objects. You can still register namespaces but this gem encourages the use of commands (see {command_pattern_link}) which allows you tap into Functional Programming by using procs, lambdas, and any object that responds to `#call`. This allow you to build -- and reuse -- more powerful filters.
+
+[source,ruby]
+----
+primary = Module.new { def one = 1 }
+
+secondary = Module.new do
+  def two = 2
+
+  def three = 3
+end
+
+function_a = proc { "four" }
+function_b = proc { "five" }
+
+class Sayer
+  def initialize prefix = "Demo"
+    @prefix = prefix
+  end
+
+  def call(message) = "#{prefix}: #{message}"
+
+  private
+
+  attr_reader :prefix
+end
+
+environment = Superfluid.build do |instance|
+  instance.register_filter(primary)
+          .register_filter(primary, four: function_a, sayer: Sayer.new)
+          .register_filters(primary, secondary, four: function_a, five: function_b)
+end
+----
+
+While the above is contrived, duplicate keys are ignored. Use of `#register_filter` is for backwards compatibility with {liquid_link}. All you need is `#register_filters` to register both namespaces (modules) and commands.
+
+=== Tags
+
+As per {liquid_link} documentation, tags only need to inherit from `Liquid::Tag` and be initialized with `tag_name`, `factor`, and `tokens`. Then you can implement a render method which accepts a `context`. Example:
+
+[source,ruby]
+----
+class Multiply < Liquid::Tag
+  def initialize(tag_name, factor, tokens)
+     super
+     @factor = factor.to_f
+  end
+
+  def render(context) = (factor * context["multiply_by"].to_f).to_s
+
+  private
+
+  attr_reader :factor
+end
+
+environment = Superfluid.build do |instance|
+  instance.register_tag(:multiply, Multiply)
+end
+----
 
 == Development
 
