@@ -19,5 +19,5 @@ module Superfluid
 
   def self.build(**) = Environment.for(**) { yield it if block_given? }
 
-  def self.new(**) = Renderer.new(**)
+  def self.new(**, &) = Renderer.new(**, &)
 end

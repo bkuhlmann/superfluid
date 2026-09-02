@@ -42,6 +42,14 @@ RSpec.describe Superfluid do
       expect(described_class.new).to be_a(Superfluid::Renderer)
     end
 
+    it "yields environment to block" do
+      echoer = -> text { text }
+      renderer = described_class.new { it.register_filters echo: echoer }
+      template = %({{ "test" | echo }})
+
+      expect(renderer.call(template)).to eq("test")
+    end
+
     it "renders content" do
       renderer = described_class.new
 
