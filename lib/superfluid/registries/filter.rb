@@ -1,18 +1,31 @@
 # frozen_string_literal: true
 
+require "core"
+require "functionable"
+
 module Superfluid
   module Registries
-    # A filter registry.
-    Filter = Data.define :mode, :commands do
-      def self.for(namespace = Liquid::StandardFilters, mode: :strict) = new(mode:).add namespace
+    # The default filter registry.
+    class Filter
+      attr_reader :mode
 
-      def initialize mode: :strict, commands: {}
-        super
+      def initialize container = Filters::Container,
+                     defaults: Liquid::StandardFilters,
+                     mode: :strict
+        @container = container
+        @mode = mode
+
+        add defaults
       end
 
       def add(*, **)
         add_namespaces(*)
         add_commands(**)
+        self
+      end
+
+      def merge(other, *)
+        container.merge(other, *)
         self
       end
 
@@ -22,55 +35,63 @@ module Superfluid
         raise Liquid::ArgumentError, error.message, error.backtrace
       end
 
-      alias_method :invoke, :call
+      alias invoke call
 
-      def clear
-        commands.clear
-        self
-      end
-
-      def names = commands.keys
+      def names = container.keys
 
       private
 
-      def add_namespaces(*all) = all.each { add_methods it }
+      attr_reader :container
+
+      def add_namespaces(*collection) = collection.each { add_methods it }
 
       def add_methods namespace
-        shadow = Class.new.include(namespace).new
-
-        all = namespace.instance_methods
-                       .each
-                       .with_object({}) do |method, all|
-                         name = method.name
-                         all[name] = shadow.method name
-                       end
-
-        add_commands(**all)
+        # Order matters.
+        case namespace
+          in Class
+            fail Liquid::ArgumentError,
+                 "Invalid type (#{namespace}) for namespace. Must be a Module or Functionable."
+          in Functionable then add_function_methods namespace
+          in Module then add_instance_methods namespace
+          # simplecov:disable
+        end
       end
 
-      def add_commands(**all) = all.each { |name, command| add_command name, command }
+      def add_function_methods namespace
+        namespace.function_methods
+                 .each
+                 .with_object({}) { |name, all| all[name] = namespace.method name }
+                 .then { add_commands(**it) }
+      end
 
-      # :reek:ManualDispatch
-      def add_command name, function
-        key = name.to_s
+      def add_instance_methods namespace
+        shadow = Class.new.include(namespace).new
 
-        return if commands.key? key
+        collection = namespace.instance_methods
+                              .each
+                              .with_object({}) do |method, all|
+                                name = method.name
+                                all[name] = shadow.method name
+                              end
 
-        case function
-          in Proc | Method | Object if function.respond_to? :call then commands[key] = function
+        add_commands(**collection)
+      end
+
+      def add_commands(**collection) = collection.each { |name, command| add_command name, command }
+
+      def add_command name, callable
+        return if container.key? name
+
+        case callable
+          in Proc | Method | Core::Composable then container.register(name) { callable }
           else fail Liquid::ArgumentError, "Filter must be callable."
         end
       end
 
-      def dispatch name, *positionals
-        key = name.to_s
-
-        if commands.key? key
-          commands[key].call(*positionals)
-        elsif mode == :strict
-          fail Liquid::UndefinedFilter, "Undefined filter: #{name}."
-        else
-          positionals.first
+      def dispatch name, *arguments
+        if container.key? name then container[name].call(*arguments)
+        elsif mode == :strict then fail Liquid::UndefinedFilter, "Undefined filter: #{name}."
+        else arguments.first
         end
       end
     end
