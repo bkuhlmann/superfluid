@@ -3,19 +3,25 @@
 :figure-caption!:
 
 :command_pattern_link: link:https://alchemists.io/articles/command_pattern[Command Pattern]
+:containable_link: link:https://alchemists.io/projects/containable[Containable]
 :core_link: link:https://alchemists.io/projects/core[Core]
+:functionable_link: link:https://alchemists.io/projects/functionable[Functionable]
 :liquid_link: link:https://shopify.github.io/liquid/[Liquid]
-:structs_link: link:https://alchemists.io/articles/ruby_structs[Structs]
+:struct_link: link:https://alchemists.io/articles/ruby_structs[Struct]
 
 = Superfluid
+
+Enhances {liquid_link} by smoothing out the rough edges with a strong focus on object composition and functional design. This includes a fully functional filter and tag registry so you can reuse lower level filters and tags within all aspects of your view layer.
 
 toc::[]
 
 == Features
 
-* Simple renderer initialization.
-* Powerful, and customizable, default environment with a cleaner Object API.
-* Ability to register filters as commands (see {command_pattern_link} for details).
+* Uses a customizable default environment with a cleaner Object API.
+* Uses {containable_link} for filter and tag registries.
+* Registers filters via a `Module`, {functionable_link}, commands (see {command_pattern_link} for details), or containers (see {containable_link} for details).
+* Registers tags via classes or containers (see {containable_link} for details).
+* Provides a default renderer for quick rendering of templates and associated data.
 
 == Requirements
 
@@ -63,18 +69,47 @@ The quickest way to get started is to create a new instance:
 renderer = Superfluid.new
 ----
 
-Now you can render your template and associated data:
+Then you can render your template and associated data:
 
 [source,ruby]
 ----
-renderer.call "Wow, that was {{ value }}!", "value" => "quick"
+renderer.call "Hi, this is a {{ value }}.", "value" => "demo"
 ----
 
 The above will yield the following output:
 
 ----
-"Wow, that was quick!"
+"Hi, this is a demo."
 ----
+
+The following sections detail how you can configure your environment, register filters, and register tags.
+
+=== Configuration
+
+The configuration is used by the environment. This is created for you automatically but if you want an instance of the default configuration, use:
+
+[source,ruby]
+----
+configuration = Superfluid::Configuration.new
+
+#<Struct:Superfluid::Configuration:0x00001780
+  default_resource_limits = {},
+  error_mode = :strict,
+  exception_renderer = #<Proc:0x0000000131200ee0 (lambda)>,
+  file_system = #<data Superfluid::Systems::Memory:0x000017b0 templates = {}>,
+  filter_registry = #<Superfluid::Registries::Filter:0x000000012f5a1290 @container=Superfluid::Filters::Container, @mode=:strict>,
+  tag_registry = #<Superfluid::Registries::Tag:0x000000012f5860d0 @container=Superfluid::Tags::Container>
+>
+----
+
+As you can see, the configuration is a {struct_link} which means you can customize using any of these attributes:
+
+* `default_resource_limits`: Limits the resources that a template can consume. Default: `{}`.
+* `error_mode`: The error mode (link:https://github.com/Shopify/liquid#error-modes[details]). Default: `:strict`.
+* `exception_renderer`: The function used to render error messages. Default: `Core::Identity` (see {core_link}).
+* `file_system`: The file system. Default: `Superfluid::Systems::Memory.new`.
+* `filter_registry`: The filter registry. Default: `Superfluid::Registries::Filter.new`.
+* `tag_registry`: The tag registry. Default: `Superfluid::Registries::Tag.new`.
 
 === Environments
 
@@ -85,99 +120,454 @@ To build the default environment, use:
 environment = Superfluid.build
 ----
 
-You can also build the default environment directly (which is what the above does:
-
-[source,ruby]
-----
-environment = Superfluid::Environment.for
-----
-
-Both of the above produce a _frozen_ environment (including frozen tags). If you need an environment that isn't frozen (tags included), use:
+To build the default environment directly (which is what the above does), use:
 
 [source,ruby]
 ----
 environment = Superfluid::Environment.new
 ----
 
-You can, later, freeze the environment once you've registered any/all filters and tags as follows:
+If you'd like to build a custom environment, you can do this several ways. For demonstration purposes, only the `error_mode` is used below but all configuration attributes are accepted:
+
+[source,ruby]
+----
+environment = Superfluid.build error_mode: :lax
+environment = Superfluid::Environment.for error_mode: :lax
+environment = Superfluid::Environment.new Superfluid::Configuration[error_mode: :lax]
+----
+
+You can also freeze the environment -- which also freezes the filter and tag registries -- once you've registered any/all filters and tags as follows:
 
 [source,ruby]
 ----
 environment.freeze
 ----
 
-Finally, the environment is an instance of a `Struct` which means you can leverage all of the power of {structs_link}.
-
-When using `Superfluid.build`, `Superfluid::Environment.for`, or `Superfluid::Environment.new`, you can customize behavior via the following keyword arguments:
-
-* `default_resource_limits`: The resource limits you want to set. Default: `{}`.
-* `error_mode`: The error mode. Default: `:strict`.
-* `exception_renderer`: The exception renderer. Default: `Core::Identity` (see {core_link} for details).
-* `file_system`: The file system. Default: `Superfluid::Systems::Memory.new`.
-* `filter_registry`: The filter registry. Default: `Superfluid::Registries::Filter.new`.
-* `tags`: The default tags. Default: `Liquid::Tags::STANDARD_TAGS`.
-
 === Filters
 
-By default, {liquid_link} only allows registration of filters as instance methods on a namespace (`Module`). Unfortunately, this leads to terrible design, bad practices, and unnecessarily hard to test objects. You can still register namespaces but this gem encourages the use of commands (see {command_pattern_link}) which allows you tap into Functional Programming by using procs, lambdas, and any object that responds to `#call`. This allow you to build -- and reuse -- more powerful filters.
+By default, {liquid_link} only allows registration of filters as instance methods on a namespace (`Module`). Unfortunately, this leads to terrible design, bad practices, and unnecessarily hard to test objects. You can still register namespaces but this gem encourages the use of commands (see {command_pattern_link} for further details) and containers via {containable_link} which allows you tap into Functional Programming by using procs, lambdas, and any object that responds to `#call`. This allows you to build -- and reuse -- more powerful filters. The following details the different kinds of filters you can use, each broken down by category.
+
+==== Defaults
+
+Default filters are provided for you automatically and can be viewed via your environment. Example:
 
 [source,ruby]
 ----
-primary = Module.new { def one = 1 }
+environment = Superfluid.build
+environment.filter_registry.names
+----
 
-secondary = Module.new do
-  def two = 2
+The above will produce a list of all registered filters. These including all filters provided by {liquid_link} and those unique to this gem which are:
 
-  def three = 3
+*jsonify*
+
+Renders objects as JSON. Example:
+
+[source,ruby]
+----
+renderer.call(%({{ data | jsonify }}), {"data" => {"a" => 1}})
+# "{\"a\":1}"
+----
+
+*parse_json*
+
+Parses JSON as a primitive. Example:
+
+[source,ruby]
+----
+renderer.call(
+  "{% assign data = payload | parse_json %}{{ data.one }}",
+  {"payload" => %({"one": 1, "two": 2})}
+)
+
+# "1"
+----
+
+*pluralize*
+
+Renders a plural string. Example:
+
+[source,ruby]
+----
+renderer.call(%({{ text | pluralize: 0 }}), {"text" => "apple"})
+# "0 apples"
+
+renderer.call(%({{ text | pluralize: 1 }}), {"text" => "apple"})
+# "1 apple"
+
+renderer.call(%({{ text | pluralize: 2 }}), {"text" => "apple"})
+# "2 apples"
+
+renderer.call(%({{ text | pluralize: 3, "i", "us" }}), {"text" => "octopus"})
+# "3 octopi"
+----
+
+*singularize*
+
+Renders a singular string. Example:
+
+[source,ruby]
+----
+renderer.call(%({{ text | singularize: 0 }}), {"text" => "apples"})
+# "0 apples"
+
+renderer.call(%({{ text | singularize: 1 }}), {"text" => "apples"})
+# "1 apple"
+
+renderer.call(%({{ text | singularize: 2 }}), {"text" => "apples"})
+# "2 apples"
+
+renderer.call(%({{ text | singularize: 1, "i", "us" }}), {"text" => "octopi"})
+# "1 octopus"
+----
+
+*trim_end*
+
+Renders string with trimmed end. Example:
+
+[source,ruby]
+----
+renderer.call(%({{ text | trim_end: 10 }}), {"text" => "A demo."})
+# "A demo."
+
+renderer.call(%({{ text | trim_end: 10 }}), {"text" => "This is a demo."})
+# "This is..."
+
+renderer.call(%({{ text | trim_end: 10, "", "---" }}), {"text" => "This is a demo."})
+# "This is---"
+
+renderer.call(%({{ text | trim_end: 10, "", "" }}), {"text" => "This is a demo."})
+# "This is a"
+----
+
+*trim_middle*
+
+Renders string with trimmed middle. Example:
+
+[source,ruby]
+----
+renderer.call(%({{ text | trim_middle: 20 }}), {"text" => "This is a demo."})
+# "A demo."
+
+renderer.call(%({{ text | trim_middle: 13 }}), {"text" => "This is a demo."})
+# "This...demo."
+
+renderer.call(%({{ text | trim_middle: 13, "--" }}), {"text" => "This is a demo."})
+# "This--demo."
+----
+
+==== Modules
+
+Module instance methods are what {liquid_link} supports by default. You only need to define instance methods within a module and then register your module. Example:
+
+[source,ruby]
+----
+# Namespaces
+module Primary
+  def echo(text) = text
 end
 
-function_a = proc { "four" }
-function_b = proc { "five" }
+module Secondary
+  def capitalize(text) = text.capitalize
 
-class Sayer
-  def initialize prefix = "Demo"
-    @prefix = prefix
-  end
-
-  def call(message) = "#{prefix}: #{message}"
-
-  private
-
-  attr_reader :prefix
+  def suffix(text, count = 1) = "#{text}-#{count}"
 end
 
-environment = Superfluid.build do |instance|
-  instance.register_filter(primary)
-          .register_filter(primary, four: function_a, sayer: Sayer.new)
-          .register_filters(primary, secondary, four: function_a, five: function_b)
+# Renderer
+renderer = Superfluid.new { it.register_filters Primary, Secondary }
+
+# Results
+renderer.call %({{ "demo" | echo }})        # "demo"
+renderer.call %({{ "demo" | capitalize }})  # "Demo"
+renderer.call %({{ "demo" | suffix }})      # "demo-1"
+renderer.call %({{ "demo" | suffix: 2 }})   # "demo-2"
+----
+
+As you can see, all three methods via the two namespaces are properly registered and immediately available for use. You'll also notice multiple namespaces were registered at once but you can register them individually and/or chain them. Examples:
+
+[source,ruby]
+----
+Superfluid.new do |environment|
+  # Single.
+  environment.register_filter Primary
+
+  # Multiple.
+  environment.register_filters Primary, Secondary
+
+  # Chained.
+  environment.register_filter(Primary)
+             .register_filter(Secondary)
+             .register_filters(Primary, Secondary)
 end
 ----
 
-While the above is contrived, duplicate keys are ignored. Use of `#register_filter` is for backwards compatibility with {liquid_link}. All you need is `#register_filters` to register both namespaces (modules) and commands.
+==== Functionables
+
+{functionable_link} modules are identical to the module examples, as shown above, except you require and extend instead. Example:
+
+[source,ruby]
+----
+require "functionable"
+
+# Namespaces
+module Primary
+  extend Functionable
+
+  def echo(text) = text
+end
+
+module Secondary
+  extend Functionable
+
+  def capitalize(text) = text.capitalize
+
+  def suffix(text, count = 1) = "#{text}-#{count}"
+end
+----
+
+This allows you to use purely functionable methods (see {functionable_link} documentation for details). At this point, you can register your functionable namespaces as follows:
+
+[source,ruby]
+----
+# Renderer
+renderer = Superfluid.new { it.register_filters Primary, Secondary }
+
+# Results
+renderer.call %({{ "demo" | echo }})        # "demo"
+renderer.call %({{ "demo" | capitalize }})  # "Demo"
+renderer.call %({{ "demo" | suffix }})      # "demo-1"
+renderer.call %({{ "demo" | suffix: 2 }})   # "demo-2"
+----
+
+Registration is identical to modules:
+
+[source,ruby]
+----
+Superfluid.new do |environment|
+  # Single.
+  environment.register_filter Primary
+
+  # Multiple.
+  environment.register_filters Primary, Secondary
+
+  # Chained.
+  environment.register_filter(Primary)
+             .register_filter(Secondary)
+             .register_filters(Primary, Secondary)
+end
+----
+
+==== Procs and Lambdas
+
+Procs and lambdas are not supported by {liquid_link} but are via this gem. Example:
+
+[source,ruby]
+----
+# Setup
+
+echo = proc { it }
+capitalize = -> text { text.capitalize }
+suffix = -> text, count = 1 { "#{text}-#{count}" }
+
+# Renderer
+renderer = Superfluid.new { it.register_filters echo:, capitalize:, suffix: }
+
+# Results
+
+renderer.call %({{ "demo" | echo }})        # "demo"
+renderer.call %({{ "demo" | capitalize }})  # "Demo"
+renderer.call %({{ "demo" | suffix }})      # "demo-1"
+renderer.call %({{ "demo" | suffix: 2 }})   # "demo-2"
+----
+
+Registration can be singular, plural, or chained:
+
+[source,ruby]
+----
+renderer = Superfluid.new do |environment|
+  # Single.
+  environment.register_filter(echo:)
+
+  # Multiple.
+  environment.register_filters(echo:, capitalize:, suffix:)
+
+  # Chained.
+  environment.register_filter(echo:)
+             .register_filter(capitalize:)
+             .register_filters(echo:, capitalize:, suffix:)
+end
+----
+
+==== Classes
+
+Classes, especially composable classes, are not supported by {liquid_link} but are via this gem. You only need to ensure you include `Core::Composable` and implement the `#call` method. Example:
+
+[source,ruby]
+----
+require "core"
+
+class Suffixer
+  include Core::Composable
+
+  def initialize default: 1
+    @default = default
+  end
+
+  def call(text, suffix = default) = "#{text}-#{suffix}"
+
+  private
+
+  attr_reader :default
+end
+----
+
+Now you can register and render with the above class as follows:
+
+[source,ruby]
+----
+# Renderer
+renderer = Superfluid.new { it.register_filters suffix: Suffixer.new }
+
+# Results
+
+renderer.call %({{ "demo" | suffix }})      # "demo-1"
+renderer.call %({{ "demo" | suffix: 2 }})   # "demo-2"
+----
+
+Registration can be singular, plural, or chained:
+
+[source,ruby]
+----
+suffix = Suffixer.new
+
+renderer = Superfluid.new do |environment|
+  # Single.
+  environment.register_filter(suffix:)
+
+  # Multiple.
+  environment.register_filters(suffix:)
+
+  # Chained.
+  environment.register_filter(suffix:)
+             .register_filters(suffix:)
+end
+----
+
+==== Containers
+
+Containers are not supported by {liquid_link} but are via this gem using {containable_link}. To use, create a container and then register your dependencies:
+
+[source,ruby]
+----
+require "containable"
+
+module Container
+  extend Containable
+
+  register(:echo) { |text| text }
+  register(:suffix) { |text, count = 1| "#{text}-#{count}"  }
+end
+----
+
+Now you can merge the container as follows:
+
+[source,ruby]
+----
+renderer = Superfluid.new { it.merge_filters Container }
+----
+
+You can also selectively merge by supplying only the filters you care about from the container:
+
+[source,ruby]
+----
+renderer = Superfluid.new { it.merge_filters Container, :suffix }
+----
+
+Once registered, then you can use as follows:
+
+[source,ruby]
+----
+renderer.call %({{ "demo" | echo }})       # "demo"
+renderer.call %({{ "demo" | suffix }})     # "demo-1"
+renderer.call %({{ "demo" | suffix: 2 }})  # "demo-2"
+----
+
+With containers, you have the full capabilities of the {containable_link}. The above only scratches the surface of what's possible.
 
 === Tags
 
-As per {liquid_link} documentation, tags only need to inherit from `Liquid::Tag` and be initialized with `tag_name`, `factor`, and `tokens`. Then you can implement a render method which accepts a `context`. Example:
+As per {liquid_link} documentation, tags only need to inherit from `Liquid::Tag` and be initialized with `tag_name`, `factor`, and `tokens` parameters. Then you can implement a render method which accepts a `context`. Example:
 
 [source,ruby]
 ----
-class Multiply < Liquid::Tag
-  def initialize(tag_name, factor, tokens)
-     super
-     @factor = factor.to_f
-  end
-
-  def render(context) = (factor * context["multiply_by"].to_f).to_s
-
-  private
-
-  attr_reader :factor
+# Tag
+class Sample < Liquid::Block
+  def render(context) = super.sub("<placeholder>", rand(100).to_s)
 end
 
-environment = Superfluid.build do |instance|
-  instance.register_tag(:multiply, Multiply)
+# Renderer
+renderer = Superfluid.new { it.register_tag :sample, Sample }
+
+# Results
+renderer.call "{% sample %}Your value is: <placeholder>.{% endsample %}"
+# "Your value is: 80."
+----
+
+You can also register single or multiple tags at once:
+
+[source,ruby]
+----
+renderer = Superfluid.new do |environment|
+  # Single.
+  environment.register_tag(:sample, Sample)
+
+  # Multiple.
+  environment.register_tags(one: Sample, two: Sample)
+
+  # Chained.
+  environment.register_tag(:sample, Sample)
+             .register_tags(one: Sample, two: Sample)
 end
 ----
+
+==== Containers
+
+Containers are not supported by {liquid_link} but are via this gem using {containable_link}. To use, create a container and then register your dependencies:
+
+[source,ruby]
+----
+require "containable"
+
+module Container
+  extend Containable
+
+  register :sample, Sample
+end
+----
+
+Now you can merge the container as follows:
+
+[source,ruby]
+----
+renderer = Superfluid.new { it.merge_tags Container }
+----
+
+You can also selectively merge by supplying only the tags you care about from the container:
+
+[source,ruby]
+----
+renderer = Superfluid.new { it.merge_tags Container, :sample }
+----
+
+Once registered, then you can use as follows:
+
+[source,ruby]
+----
+renderer.call "{% sample %}Your value is: <placeholder>.{% endsample %}"
+# "Your value is: 85."
+----
+
+With containers, you have the full capabilities of the {containable_link}. The above only scratches the surface of what's possible.
 
 == Development
 
