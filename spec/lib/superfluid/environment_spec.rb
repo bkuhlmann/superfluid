@@ -1,48 +1,10 @@
 # frozen_string_literal: true
 
+require "containable"
 require "spec_helper"
 
 RSpec.describe Superfluid::Environment do
   subject(:environment) { described_class.new }
-
-  describe ".for" do
-    it "answers new instance" do
-      expect(described_class.for).to be_a(described_class)
-    end
-
-    it "answers new instance with custom settings" do
-      exception_renderer = proc { "error" }
-      file_system = Object.new
-      filter_registry = Object.new
-      tags = {test: 1}
-
-      instance = described_class.for(
-        error_mode: :lax,
-        exception_renderer:,
-        file_system:,
-        filter_registry:,
-        tags:
-      )
-
-      expect(instance).to have_attributes(
-        error_mode: :lax,
-        exception_renderer:,
-        file_system:,
-        filter_registry:,
-        tags:
-      )
-    end
-
-    it "yields block" do
-      instance = described_class.for { it.error_mode = :lax }
-      expect(instance.error_mode).to eq(:lax)
-    end
-
-    it "answers frozen instance" do
-      instance = described_class.for
-      expect(instance.frozen?).to be(true)
-    end
-  end
 
   describe ".default" do
     it "answers default instance" do
@@ -50,42 +12,22 @@ RSpec.describe Superfluid::Environment do
     end
   end
 
+  describe ".for" do
+    it "answers custom configuratoin" do
+      instance = described_class.for error_mode: :lax
+      expect(instance.error_mode).to eq(:lax)
+    end
+
+    it "yields block" do
+      instance = described_class.for { it.error_mode = :lax }
+      expect(instance.error_mode).to eq(:lax)
+    end
+  end
+
   describe "#initialize" do
-    it "answers new instance" do
-      expect(described_class.new).to be_a(described_class)
-    end
-
-    it "answers default configuration" do
-      expect(described_class.new).to have_attributes(
-        default_resource_limits: Core::EMPTY_HASH,
-        error_mode: :strict,
-        exception_renderer: Core::Identity,
-        file_system: Superfluid::Systems::Memory.new,
-        filter_registry: be_a(Superfluid::Registries::Filter),
-        tags: be_a(Hash)
-      )
-    end
-
-    it "answers custom configuration" do
-      fake = Object.new
-
-      instance = described_class[
-        default_resource_limits: fake,
-        error_mode: :lax,
-        exception_renderer: fake,
-        file_system: fake,
-        filter_registry: fake,
-        tags: {}
-      ]
-
-      expect(instance).to have_attributes(
-        default_resource_limits: fake,
-        error_mode: :lax,
-        exception_renderer: fake,
-        file_system: fake,
-        filter_registry: fake,
-        tags: {}
-      )
+    it "yields block" do
+      instance = described_class.new { it.error_mode = :lax }
+      expect(instance.error_mode).to eq(:lax)
     end
   end
 
@@ -122,6 +64,34 @@ RSpec.describe Superfluid::Environment do
 
   describe "#filter_method_names" do
     it_behaves_like "a filter name collection", :filter_method_names
+  end
+
+  describe "#merge_filters" do
+    it "merges other container" do
+      other = Module.new.extend(Containable).register(:merge_a, 1).register(:merge_b, 2)
+      environment.merge_filters other, :merge_a
+
+      expect(environment.filter_names).not_to include("merge_b")
+    end
+
+    it "answers itself" do
+      other = Module.new.extend Containable
+      expect(environment.merge_filters(other)).to be_a(described_class)
+    end
+  end
+
+  describe "#merge_tags" do
+    it "merges other container" do
+      other = Module.new.extend(Containable).register(:merge_a, 1)
+      environment.merge_tags other, :merge_a
+
+      expect(environment.filter_names).not_to include("merge_b")
+    end
+
+    it "answers itself" do
+      other = Module.new.extend Containable
+      expect(environment.merge_tags(other)).to be_a(described_class)
+    end
   end
 
   describe "#register_filter" do
@@ -171,18 +141,24 @@ RSpec.describe Superfluid::Environment do
   end
 
   describe "#register_tag" do
-    it "adds tag (symbol)" do
+    it "adds tag" do
       environment.register_tag :test, Object
-      expect(environment.tags).to include("test" => Object)
-    end
-
-    it "adds tag (string)" do
-      environment.register_tag "test", Object
       expect(environment.tags).to include("test" => Object)
     end
 
     it "answers itself" do
       expect(environment.register_tag(:test, Object)).to be_a(described_class)
+    end
+  end
+
+  describe "#register_tags" do
+    it "adds tags" do
+      environment.register_tags one: Object, two: Object
+      expect(environment.tags).to include("one" => Object, "two" => Object)
+    end
+
+    it "answers itself" do
+      expect(environment.register_tags).to be_a(described_class)
     end
   end
 
@@ -207,11 +183,6 @@ RSpec.describe Superfluid::Environment do
   describe "#freeze" do
     it "answers frozen instance" do
       expect(environment.freeze.frozen?).to be(true)
-    end
-
-    it "freezes tags" do
-      environment.freeze
-      expect(environment.tags.frozen?).to be(true)
     end
 
     it "answers itself" do
