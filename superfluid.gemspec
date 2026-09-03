@@ -27,6 +27,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "base64", "~> 0.3"
   spec.add_dependency "containable", "~> 2.5"
   spec.add_dependency "core", "~> 3.4"
+  spec.add_dependency "functionable", "~> 1.4"
   spec.add_dependency "liquid", "~> 5.13"
   spec.add_dependency "refinements", "~> 14.0"
   spec.add_dependency "zeitwerk", "~> 2.8"
