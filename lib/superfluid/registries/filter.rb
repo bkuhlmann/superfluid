@@ -37,7 +37,7 @@ module Superfluid
 
       alias invoke call
 
-      def names = container.keys
+      def names = container.keys.sort
 
       private
 

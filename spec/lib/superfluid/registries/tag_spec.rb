@@ -77,6 +77,11 @@ RSpec.describe Superfluid::Registries::Tag do
       expect(registry.names).to include("test")
     end
 
+    it "answers sorted names" do
+      registry.add z: 1, y: 2, x: 3
+      expect(registry.names).to eq(%w[x y z])
+    end
+
     it "answers empty array when commands don't exist" do
       expect(registry.names).to eq([])
     end

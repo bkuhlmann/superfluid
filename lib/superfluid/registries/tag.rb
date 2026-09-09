@@ -22,7 +22,7 @@ module Superfluid
 
       def get(name) = (container[name] if container.key? name)
 
-      def names = container.keys
+      def names = container.keys.sort
 
       def to_h = container.each.to_h
 
