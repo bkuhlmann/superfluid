@@ -29,6 +29,39 @@ RSpec.describe Superfluid::Tags::Template do
       expect(content).to eq("abc  123")
     end
 
+    it "answers content with no whitespaces in end tag" do
+      template = "{% template test %}Test{%endtemplate%}{% render 'test' %}"
+      content = renderer.call template, {}
+
+      expect(content).to eq("Test")
+    end
+
+    it "answers content with whitespaces in end tag" do
+      template = "{% template test %}Test{%\n  endtemplate  \n%}{% render 'test' %}"
+      content = renderer.call template, {}
+
+      expect(content).to eq("Test")
+    end
+
+    it "answers content with trimmed end tag" do
+      template = "{% template test %}Test{%- endtemplate -%}{% render 'test' %}"
+      content = renderer.call template, {}
+
+      expect(content).to eq("Test")
+    end
+
+    it "answers content with trimmed whitespace after trimmed end tag" do
+      template = "{% template test %}Test{% endtemplate -%}\n  {% render 'test' %}"
+      content = renderer.call template, {}
+
+      expect(content).to eq("Test")
+    end
+
+    it "fails when end tag is missing" do
+      expectation = proc { renderer.call "{% template my_template %}Hello", {} }
+      expect(&expectation).to raise_error(Liquid::SyntaxError, /'template' tag was never closed/)
+    end
+
     it "answers error with invalid template name" do
       content = renderer.call "{% template banger! %}Hello, world!{% endtemplate %}", {}
 

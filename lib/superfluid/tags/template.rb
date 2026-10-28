@@ -17,10 +17,12 @@ module Superfluid
         content.clear
 
         while (token = tokens.shift)
-          break if token.strip == "{% endtemplate %}"
+          return close token if end? token
 
           content << token
         end
+
+        raise_tag_never_closed block_name
       end
 
       def render context
@@ -36,6 +38,10 @@ module Superfluid
       private
 
       attr_reader :name, :content
+
+      def close(token) = parse_context.trim_whitespace = token.end_with?("-%}")
+
+      def end?(token) = token.include? block_delimiter
     end
   end
 end
