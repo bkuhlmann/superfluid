@@ -6,7 +6,7 @@ module Superfluid
   module Tags
     # A container of tag dependencies.
     module Container
-      extend Containable
+      extend Containable[register: Register]
 
       register :template, Template
     end

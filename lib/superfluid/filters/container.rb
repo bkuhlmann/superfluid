@@ -9,7 +9,7 @@ module Superfluid
   module Filters
     # A container of filter dependencies.
     module Container
-      extend Containable
+      extend Containable[register: Register]
 
       using Refinements::String
 

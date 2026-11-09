@@ -80,8 +80,6 @@ module Superfluid
       def add_commands(**collection) = collection.each { |name, command| add_command name, command }
 
       def add_command name, callable
-        return if container.key? name
-
         case callable
           in Proc | Method | Core::Composable then container.register(name) { callable }
           else fail Liquid::ArgumentError, "Filter must be callable."

@@ -22,14 +22,6 @@ RSpec.describe Superfluid::Registries::Filter do
   end
 
   describe "#add" do
-    it "ignores duplicate key" do
-      one = proc { "one" }
-      two = proc { "two" }
-      registry.add(test: one).add test: two
-
-      expect(registry.call(:test)).to eq("one")
-    end
-
     it "answers itself when key exists" do
       other = proc { "other" }
       expect(registry.add(test: other)).to be_a(described_class)
