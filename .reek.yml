@@ -3,6 +3,9 @@ exclude_paths:
   - vendor
 
 detectors:
+  ControlParameter:
+    exclude:
+      - Superfluid::Register#call
   LongParameterList:
     enabled: false
   UnusedParameters:
