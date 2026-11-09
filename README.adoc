@@ -6,7 +6,7 @@
 :containable_link: link:https://alchemists.io/projects/containable[Containable]
 :core_link: link:https://alchemists.io/projects/core[Core]
 :functionable_link: link:https://alchemists.io/projects/functionable[Functionable]
-:liquid_link: link:https://shopify.github.io/liquid/[Liquid]
+:liquid_link: link:https://shopify.github.io/liquid[Liquid]
 :struct_link: link:https://alchemists.io/articles/ruby_structs[Struct]
 
 = Superfluid
@@ -220,6 +220,32 @@ environment.filter_registry.names
 
 The above will produce a list of all registered filters. These including all filters provided by {liquid_link} and those unique to this gem which are:
 
+===== `append`
+
+Renders a suffix appended to a `String` or `Array`. This also overrides and enhances the default {liquid_link} filter of the same name. Example:
+
+*Array*
+
+[source,ruby]
+----
+renderer.call(%({{ data | append: "three" }}), {"data" => %w[one two]})
+# "onetwothree"
+
+renderer.call(%({{ data | append: suffix }}), {"data" => %w[one two], "suffix" => "three"})
+# "onetwothree"
+----
+
+*String*
+
+[source,ruby]
+----
+renderer.call %({{ "demo" | append: " suffix" }})
+# "demo suffix"
+
+renderer.call(%({{ "demo" | append: suffix }}), {"suffix" => " suffix"})
+# "demo suffix"
+----
+
 ===== `jsonify`
 
 Renders objects as JSON. Example:
@@ -261,6 +287,32 @@ renderer.call(%({{ text | pluralize: 2 }}), {"text" => "apple"})
 
 renderer.call(%({{ text | pluralize: 3, "i", "us" }}), {"text" => "octopus"})
 # "3 octopi"
+----
+
+===== `prepend`
+
+Renders a prefix prepended to a `String` or `Array`. This also overrides and enhances the default {liquid_link} filter of the same name. Example:
+
+*Array*
+
+[source,ruby]
+----
+renderer.call(%({{ data | prepend: "one" }}), {"data" => %w[two three]})
+# "onetwothree"
+
+renderer.call(%({{ data | prepend: prefix }}), {"data" => %w[two three], "prefix" => "one"})
+# "onetwothree"
+----
+
+*String*
+
+[source,ruby]
+----
+renderer.call %({{ "demo" | prepend: "prefix " }})
+# "prefix demo"
+
+renderer.call(%({{ "demo" | prepend: prefix }}), {"prefix" => "prefix "})
+# "demo prefix"
 ----
 
 ===== `singularize`
