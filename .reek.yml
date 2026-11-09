@@ -10,3 +10,7 @@ detectors:
     enabled: false
   UnusedParameters:
     enabled: false
+  FeatureEnvy:
+    exclude:
+      - Superfluid::Filters::Common#append
+      - Superfluid::Filters::Common#prepend

@@ -10,12 +10,12 @@ module Superfluid
       attr_reader :mode
 
       def initialize container = Filters::Container,
-                     defaults: Liquid::StandardFilters,
+                     defaults: [Liquid::StandardFilters, Filters::Common],
                      mode: :strict
         @container = container
         @mode = mode
 
-        add defaults
+        add(*defaults)
       end
 
       def add(*, **)
